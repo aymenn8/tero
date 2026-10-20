@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>SUFeedURL</key>
+    <string>https://github.com/aymenn8/tero-releases/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>2a6GdOqZEgRQssq9kPFNTc8XhjNHjj52KK2yPEE4m7A=</string>
+    <key>SURequireSignedFeed</key>
+    <true/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SUEnableSystemProfiling</key>
+    <false/>
+    <key>TeroWebsiteURL</key>
+    <string>$(TERO_WEBSITE_URL)</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER).auth</string>
+            <key>CFBundleURLSchemes</key>
+            <array><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string></array>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+        </dict>
+    </array>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Create the reminders you review and approve in Tero.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Create the calendar events you review and approve in Tero.</string>
+</dict>
+</plist>

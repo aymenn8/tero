@@ -1,0 +1,13 @@
+project_id = "tero"
+
+# Each endpoint validates confirmed Supabase users via Auth before accessing the DB/providers.
+# The platform JWT toggle is off because the handler performs its own authentication.
+# correct/rank additionally retain the expiring owner-only Dev credential; public builds never read it.
+[functions.tero-correct]
+verify_jwt = false
+[functions.tero-rank]
+verify_jwt = false
+[functions.tero-account]
+verify_jwt = false
+[functions.tero-events]
+verify_jwt = false

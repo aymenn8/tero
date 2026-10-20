@@ -1,0 +1,14 @@
+.build/
+build/
+DerivedData/
+.DS_Store
+xcuserdata/
+*.xcuserstate
+Secrets.local.xcconfig
+.env
+.env.*
+supabase/.temp/
+*.secrets
+
+.release/
+__pycache__/

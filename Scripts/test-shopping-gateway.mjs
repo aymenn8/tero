@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {createShoppingHandler} from '../supabase/functions/tero-shop/handler.ts';
+import {productsFromResponse} from '../supabase/functions/tero-shop/products.ts';
+import {productImage,publicIP} from '../supabase/functions/tero-shop/images.ts';
+const id='00000000-0000-0000-0000-000000000001',secret='x'.repeat(50);
+const product={name:'Keyboard',price:'€80',reason:'Quiet keys',tradeoff:'No backlight',url:'https://www.logitech.com/product'};
+const response={status:'completed',output:[{type:'web_search_call',action:{sources:[{url:product.url}]}},
+ {type:'message',content:[{type:'output_text',text:JSON.stringify({summary:'Budget not specified.',products:[product]})}]}]};
+assert.equal(productsFromResponse(response).products.length,1);
+assert.equal(productsFromResponse({...response,output:response.output.slice(1)}),null);
+const invented=structuredClone(response);invented.output[1].content[0].text=JSON.stringify({summary:'',products:[{...product,url:'https://invented.example/product'}]});
+assert.equal(productsFromResponse(invented),null);
+let calls=0;
+const handler=createShoppingHandler({secret,expiresAt:Date.now()+60000,apiKey:'synthetic',loadPrompt:async()=>({version:1,instructions:'Search. {{current_date}}'}),fetcher:async(_url,options)=>{
+ calls++;const input=JSON.parse(options.body);assert.equal(input.tool_choice,'required');assert.equal(input.store,false);assert.equal(input.max_tool_calls,2);assert.deepEqual(input.include,['web_search_call.action.sources']);return Response.json(response);
+}});
+const request=(token=secret,selection=JSON.stringify({request:'Keyboard',preferences:'',locale:'fr_FR'}))=>new Request('https://example.com',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({requestID:id,action:'ask',selection})});
+assert.equal((await handler(request('wrong'))).status,401);assert.equal(calls,0);
+assert.equal((await handler(request(secret,'not JSON'))).status,400);assert.equal(calls,0);
+const result=await handler(request());assert.equal(result.status,200);assert.equal((await result.json()).products[0].imageURL,null);
+for(const ip of ['127.0.0.1','10.0.0.1','169.254.1.1','192.168.1.1','100.64.0.1','::1','fc00::1'])assert.equal(publicIP(ip),false);
+let imageFetches=0;
+assert.equal(await productImage(product.url,{resolve:async()=>['127.0.0.1'],fetcher:async()=>{imageFetches++;}}),null);assert.equal(imageFetches,0);
+assert.equal(await productImage('https://unknown.example/product',{resolve:async()=>['8.8.8.8'],fetcher:async()=>{imageFetches++;}}),null);assert.equal(imageFetches,0);
+const image=await productImage(product.url,{resolve:async()=>['8.8.8.8'],fetcher:async()=>new Response('<meta content="https://www.logitech.com/image.jpg" property="og:image">',{headers:{'Content-Type':'text/html'}})});
+assert.equal(image,'https://www.logitech.com/image.jpg');
+const generic=await productImage(product.url,{resolve:async()=>['8.8.8.8'],fetcher:async()=>new Response('<meta property="og:image" content="https://www.logitech.com/homepage/global-og-image.png">',{headers:{'Content-Type':'text/html'}})});
+assert.equal(generic,null);
+const structured=await productImage(product.url,{resolve:async()=>['8.8.8.8'],fetcher:async()=>new Response('<script type="application/ld+json">{"@type":"Product","image":"https://www.logitech.com/keyboard.jpg"}</script><meta property="og:image" content="https://www.logitech.com/brand.jpg">',{headers:{'Content-Type':'text/html'}})});
+assert.equal(structured,'https://www.logitech.com/keyboard.jpg');
+console.log('Shop gateway: verified sources, auth, request bounds and image checks passed.');
