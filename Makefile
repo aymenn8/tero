@@ -27,3 +27,10 @@ publish:
 
 release-check:
 	python3 Scripts/publish-release.py --check
+
+# Open-source mirror (aymenn8/tero): dry run by default; publish with
+#   python3 Scripts/publish-open-source.py --push -m "Public commit message"
+.PHONY: open-source
+open-source:
+	@test -f Scripts/publish-open-source.py || { echo "Maintainer only: publishes the private repository to the open-source mirror."; exit 1; }
+	python3 Scripts/publish-open-source.py
