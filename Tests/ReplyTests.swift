@@ -6,7 +6,7 @@ import Testing
   var state = ActionBarState()
   #expect(!state.actions.contains(.reply))
   state.select(.more); state.activate()
-  #expect(state.suggestions == [.rewrite, .keyPoints, .extractTasks])
+  #expect(state.suggestions == [.fix, .rewrite, .keyPoints])
   state.beginSearch(query: "répondre")
   #expect(state.suggestions == [.reply])
   state.activate()

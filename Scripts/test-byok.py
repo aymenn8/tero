@@ -8,20 +8,23 @@ root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix='tero-byok-') as folder:
     temp = Path(folder)
     sources = sorted((root / 'Sources/Core').glob('*.swift')) + [root / 'Sources/AI' / name for name in
-        ['AIProvider.swift', 'AIGatewaySupport.swift', 'AIProviderClient.swift', 'LocalGateway.swift', 'CorrectionClient.swift']]
+        ['AIProvider.swift', 'AIGatewaySupport.swift', 'AIProviderClient.swift', 'LocalGateway.swift', 'CorrectionClient.swift',
+         'RankingClient.swift', 'JevClient.swift']]
     sources = [p for p in sources if not p.stem.endswith(' 2')] + [root / 'Scripts/BYOKSmoke.swift']
     binary = temp / 'byok-smoke'
     subprocess.run(['swiftc', '-swift-version', '6', '-parse-as-library', '-module-name', 'BYOKSmoke',
                     '-module-cache-path', str(temp / 'cache'), '-o', str(binary), *map(str, sources)], check=True)
     # Command-line tools look up bundle resources next to the executable.
-    (temp / 'Prompts.json').write_text((root / 'Resources/AI/Prompts.json').read_text())
+    for name in ['Prompts.json', 'RankingCatalog.json']:
+        (temp / name).write_text((root / 'Resources/AI' / name).read_text())
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', 0)); port = probe.getsockname()[1]
     log = temp / 'requests.jsonl'
     server = subprocess.Popen([sys.executable, str(root / 'Scripts/byok_mock_provider.py'), str(port), str(log)])
     try:
         time.sleep(0.6)
-        result = subprocess.run([str(binary), str(port)], timeout=120)
+        jev_request = temp / 'jev-request.json'
+        result = subprocess.run([str(binary), str(port), str(jev_request)], timeout=120)
         requests = [json.loads(line) for line in log.read_text().splitlines()]
         bodies = [r['body'] for r in requests]
         # Shape checks: keys reach the right header, prompts are rendered, nothing is left as a placeholder.
@@ -33,6 +36,11 @@ with tempfile.TemporaryDirectory(prefix='tero-byok-') as folder:
         pdf_file = [b for b in bodies if 'input_file' in json.dumps(b)]
         assert pdf_text and 'Orion invoice' in json.dumps(pdf_text[0]), 'PDF text fallback'
         assert pdf_file, 'native PDF input for OpenAI'
+        # Jev: the Typesafe key goes only to Typesafe, and the body equals what tero-rank would send.
+        jev = [r for r in requests if r['path'].endswith('/systemone') and r['auth'] == 'Bearer ts-test' and len(r['body']['questions']) == 3]
+        assert jev, 'Jev request with own key'
+        sent = temp / 'jev-sent.json'; sent.write_text(json.dumps(jev[0]['body']))
+        subprocess.run(['node', '--experimental-strip-types', '--no-warnings', str(root / 'Scripts/test-jev-parity.mjs'), str(jev_request), str(sent)], check=True)
         print(f'Request shapes OK ({len(requests)} synthetic provider calls)')
         sys.exit(result.returncode)
     finally:

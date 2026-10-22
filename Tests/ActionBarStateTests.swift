@@ -13,7 +13,7 @@ import Testing
     var state = ActionBarState()
     state.select(.more)
     state.activate()
-    #expect(state.actions == [.rewrite, .keyPoints, .extractTasks, .back, .search])
+    #expect(state.actions == [.fix, .rewrite, .keyPoints, .back, .search])
     let firstEscapeCloses = state.escape()
     #expect(!firstEscapeCloses)
     #expect(state.selected == .explain)

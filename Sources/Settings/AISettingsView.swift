@@ -66,6 +66,7 @@ struct AISettingsView: View {
         }.padding(.horizontal, 15).padding(.vertical, 12)
       }
       capabilities
+      JevKeySettings()
       SettingsGroup(title: "") {
         SettingsRow(title: "Prefer not to manage keys?", detail: "Tero Pro includes AI with a Tero account.") {
           HStack(spacing: 12) {
@@ -192,6 +193,71 @@ struct AISettingsView: View {
     if let failure = error as? CorrectionClient.Failure, failure != .invalid { return failure.localizedDescription }
     if error is URLError { return "Couldn’t reach \(selected.title). Check the address and your connection." }
     return "The model didn’t return a usable answer. Try another model."
+  }
+}
+
+/// Optional Typesafe key: Jev orders the action bubbles, called straight from this Mac.
+/// Without it, recommendations use Tero's local rules.
+private struct JevKeySettings: View {
+  @State private var key = ""
+  @State private var saved = AIKeyVault.read(account: AIKeyVault.jevAccount) != nil
+  @State private var status: String?
+  @State private var failed = false
+  @State private var busy = false
+
+  var body: some View {
+    SettingsGroup(title: "Recommendations") {
+      SettingsRow(title: "Jev key", detail: saved ? "Saved in your Keychain" : "Optional · smarter suggestions") {
+        HStack(spacing: 8) {
+          SecureField(saved ? "••••••••  Replace key" : "Paste your Typesafe key", text: $key)
+            .textFieldStyle(.roundedBorder).frame(width: 200)
+          Link("Get a key", destination: JevClient.keyPage).font(SettingsStyle.font(11)).fixedSize()
+        }
+      }
+      SettingsDivider()
+      HStack(spacing: 10) {
+        if busy { ProgressView().controlSize(.small) }
+        else if let status {
+          Label(status, systemImage: failed ? "exclamationmark.triangle" : "checkmark.circle")
+            .foregroundStyle(failed ? .orange : .green).font(SettingsStyle.font(11)).lineLimit(2)
+        } else {
+          Text(saved ? "Used with your own AI provider" : "Without a key, Tero ranks actions with local rules")
+            .font(SettingsStyle.font(11)).foregroundStyle(SettingsStyle.secondary)
+        }
+        Spacer()
+        if saved { Button("Remove", role: .destructive, action: remove).buttonStyle(SettingsPill()).disabled(busy) }
+        Button("Save & test", action: save).buttonStyle(SettingsPill())
+          .disabled(busy || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }.padding(.horizontal, 15).padding(.vertical, 12)
+    }
+  }
+
+  private func save() {
+    let typed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !typed.isEmpty else { return }
+    busy = true; status = nil
+    Task {
+      defer { busy = false }
+      do {
+        // A synthetic two-action score proves the key works before it is kept.
+        try await JevClient(deadline: .seconds(10), key: typed).verify()
+        guard AIKeyVault.save(typed, account: AIKeyVault.jevAccount) else { failed = true; status = "Couldn’t save the key to your Keychain."; return }
+        key = ""; saved = true; failed = false; status = "Connected. Jev now orders your actions."
+      } catch {
+        failed = true
+        status = switch error as? JevClient.Failure {
+          case .rejected: "Typesafe rejected this key."
+          case .timeout: "Typesafe didn’t answer in time. Try again."
+          case .invalid: "Jev returned an unexpected answer."
+          default: "Couldn’t reach Typesafe. Check your connection."
+        }
+      }
+    }
+  }
+
+  private func remove() {
+    AIKeyVault.delete(account: AIKeyVault.jevAccount)
+    saved = false; key = ""; status = nil
   }
 }
 

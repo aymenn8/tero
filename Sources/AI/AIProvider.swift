@@ -140,14 +140,22 @@ struct AIConfiguration: Sendable, Equatable {
 
 /// One Keychain item per provider, readable only on this Mac while unlocked.
 enum AIKeyVault {
-  private static func query(_ provider: AIProvider) -> [String: Any] {
+  /// Keychain account for the optional Typesafe key that runs Jev recommendations.
+  static let jevAccount = "typesafe-jev"
+
+  private static func query(_ account: String) -> [String: Any] {
     [kSecClass as String: kSecClassGenericPassword,
      kSecAttrService as String: "\(Bundle.main.bundleIdentifier ?? "com.aymenkadri.tero").ai-key",
-     kSecAttrAccount as String: provider.rawValue]
+     kSecAttrAccount as String: account]
   }
 
-  static func read(_ provider: AIProvider) -> String? {
-    var attributes = query(provider)
+  static func read(_ provider: AIProvider) -> String? { read(account: provider.rawValue) }
+  @discardableResult
+  static func save(_ key: String, for provider: AIProvider) -> Bool { save(key, account: provider.rawValue) }
+  static func delete(_ provider: AIProvider) { delete(account: provider.rawValue) }
+
+  static func read(account: String) -> String? {
+    var attributes = query(account)
     attributes[kSecReturnData as String] = true
     attributes[kSecMatchLimit as String] = kSecMatchLimitOne
     var result: CFTypeRef?
@@ -157,19 +165,19 @@ enum AIKeyVault {
   }
 
   @discardableResult
-  static func save(_ key: String, for provider: AIProvider) -> Bool {
+  static func save(_ key: String, account: String) -> Bool {
     let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !key.isEmpty, key.count <= 512, !key.contains(where: \.isNewline) else { return false }
     let value = [kSecValueData as String: Data(key.utf8)]
-    let status = SecItemUpdate(query(provider) as CFDictionary, value as CFDictionary)
+    let status = SecItemUpdate(query(account) as CFDictionary, value as CFDictionary)
     if status == errSecSuccess { return true }
     guard status == errSecItemNotFound else { return false }
-    var attributes = query(provider).merging(value) { _, new in new }
+    var attributes = query(account).merging(value) { _, new in new }
     attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
   }
 
-  static func delete(_ provider: AIProvider) {
-    SecItemDelete(query(provider) as CFDictionary)
+  static func delete(account: String) {
+    SecItemDelete(query(account) as CFDictionary)
   }
 }

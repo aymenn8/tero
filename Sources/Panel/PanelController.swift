@@ -91,6 +91,12 @@ final class PanelController: NSObject, NSWindowDelegate {
   private(set) var askVisible = false
   private(set) var askMode = false
   private(set) var askQuestionPreview: String?
+  /// Set while the Ask composer is about the captured selection rather than a standalone question.
+  private(set) var selectionAskMode: SelectionAskMode?
+  var selectionAskPreview: String? {
+    guard case .selected(let text) = selection?.status else { return nil }
+    return String(text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").prefix(160))
+  }
   var askQuery = "" {
     didSet {
       guard askQuery != oldValue else { return }
@@ -103,7 +109,8 @@ final class PanelController: NSObject, NSWindowDelegate {
   private(set) var askEditorHeight: CGFloat = PanelController.askEditorHeight(for: "")
   private var askPanelSize: CGSize {
     CGSize(width: AskInputView.width + 2 * PanelPlacement.contentInset,
-           height: askEditorHeight + AskInputView.verticalChrome + 2 * PanelPlacement.contentInset)
+           height: askEditorHeight + AskInputView.verticalChrome + (selectionAskMode == nil ? 0 : AskInputView.selectionChrome)
+             + 2 * PanelPlacement.contentInset)
   }
   private static func shoppingPanelSize(_ session: ShoppingSession) -> CGSize {
     CGSize(width: 440 + 2 * PanelPlacement.contentInset, height: session.height + 2 * PanelPlacement.contentInset)
@@ -425,7 +432,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     let personalActions = habits.filter { $0.isEligible(in: context) }.map { RankingClient.PersonalCandidate(habit: $0) }
     let local = RecommendationEngine.rank(context: context, personalActions: habits)
     if let requestedAction { rankingDiagnostic = "Direct shortcut"; return local.filter { $0.target == .native(requestedAction) } }
-    if AccountStore.shared.usage?.canRank == false, (AccountStore.shared.usage?.resetDate ?? .distantPast) > .now { rankingDiagnostic = "Local · recommendation allowance reached"; return local }
+    if !GatewayAccess.usesOwnKey, AccountStore.shared.usage?.canRank == false, (AccountStore.shared.usage?.resetDate ?? .distantPast) > .now { rankingDiagnostic = "Local · recommendation allowance reached"; return local }
     let rankingLocal = (ShoppingRequest.isActivated ? local : local.filter { $0.target != .native(.shop) })
       .filter { if case .native(let action) = $0.target { return action.definition?.rankedOnServer != false } else { return true } }
     // Local-only actions keep their place ahead of the semantic ranking.
@@ -433,12 +440,20 @@ final class PanelController: NSObject, NSWindowDelegate {
     let candidates = rankingLocal.map { $0.target.rankingID }
     guard candidates.count >= 2, let observations = RankingContext(context) else { return local }
     let accountID = AccountStore.shared.user?.id
-    if !inspect, let scores = rankingMemo.scores(accountID: accountID, context: observations, candidates: candidates, personalActions: personalActions),
+    // With an own AI key, Jev runs only with the person's own Typesafe key, straight from this Mac.
+    let ownJev = GatewayAccess.usesOwnKey ? JevClient.stored : nil
+    let memoScope = ownJev != nil ? JevClient.memoScope : accountID
+    if !inspect, let scores = rankingMemo.scores(accountID: memoScope, context: observations, candidates: candidates, personalActions: personalActions),
        let ranked = SemanticRankingPolicy.apply(scores, to: rankingLocal) {
-      rankingDiagnostic = "Jev · recent selection"; return localOnly + ranked
+      rankingDiagnostic = "Jev · recent selection"; return SemanticRankingPolicy.merge(localOnly: localOnly, ranked: ranked)
     }
-    // Signed-out invocations stay entirely local.
-    guard accountID != nil else { return local }
+    if let ownJev {
+      return await rankWithOwnJev(ownJev, observations: observations, candidates: candidates, personalActions: personalActions,
+                                  local: local, rankingLocal: rankingLocal, localOnly: localOnly)
+    }
+    // Signed-out and own-key invocations without a Typesafe key stay entirely local:
+    // with an own key nothing about the selection reaches Tero's servers.
+    guard accountID != nil, !GatewayAccess.usesOwnKey else { rankingDiagnostic = "Local rules"; return local }
     let started = ContinuousClock.now
     // Capture is complete. A non-key, click-through branded bubble can now
     // acknowledge the shortcut without stealing the source editor's focus.
@@ -477,9 +492,40 @@ final class PanelController: NSObject, NSWindowDelegate {
       let elapsed = started.duration(to: .now).components
       let totalMs = elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000
       rankingDiagnostic = "Jev · \(totalMs) ms total / \(result.latencyMs) ms server · \(result.usage.inputTokens) in / \(result.usage.outputTokens) out · prompt v\(result.promptVersion)"
-      return localOnly + ranked
+      return SemanticRankingPolicy.merge(localOnly: localOnly, ranked: ranked)
     } catch {
       if !Task.isCancelled { rankingDiagnostic = (error as? RankingClient.Failure) == .timeout ? "Local · Jev exceeded 3 s" : error is RankingClient.Failure ? "Local · ranking gateway unavailable" : "Local · network fallback" }
+      return local
+    }
+  }
+
+  /// Same presentation and wait budget as Tero Pro ranking; the request goes to Typesafe directly.
+  private func rankWithOwnJev(_ jev: JevClient, observations: RankingContext, candidates: [String],
+                              personalActions: [RankingClient.PersonalCandidate], local: [ActionRecommendation],
+                              rankingLocal: [ActionRecommendation], localOnly: [ActionRecommendation]) async -> [ActionRecommendation] {
+    let started = ContinuousClock.now
+    state = ActionBarState(recommendations: local)
+    invocationOpening = true
+    rankingDiagnostic = "Jev (your key) · awaiting scores"
+    show(opening: true)
+    do {
+      let scores = try await jev.rank(context: observations, candidates: candidates, personalActions: personalActions)
+      try Task.checkCancellation()
+      guard GatewayAccess.usesOwnKey, let ranked = SemanticRankingPolicy.apply(scores, to: rankingLocal) else {
+        rankingDiagnostic = "Local · invalid ranking"; return local
+      }
+      rankingMemo.store(scores, accountID: JevClient.memoScope, context: observations, candidates: candidates, personalActions: personalActions)
+      let elapsed = started.duration(to: .now).components
+      rankingDiagnostic = "Jev (your key) · \(elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000) ms"
+      return SemanticRankingPolicy.merge(localOnly: localOnly, ranked: ranked)
+    } catch {
+      if !Task.isCancelled {
+        rankingDiagnostic = switch error as? JevClient.Failure {
+          case .timeout: "Local · Jev exceeded 3 s"
+          case .rejected: "Local · Typesafe key rejected"
+          default: "Local · Jev unavailable"
+        }
+      }
       return local
     }
   }
@@ -566,7 +612,51 @@ final class PanelController: NSObject, NSWindowDelegate {
   func backFromAsk() {
     if refiningResult, resultBeforeRefinement != nil { restoreResult(); return }
     guard askVisible else { return }
+    if selectionAskMode != nil { returnFromSelectionAsk(); return }
     dismiss()
+  }
+
+  private func beginSelectionAsk() {
+    noticeDismissal?.cancel()
+    noticeDismissal = nil
+    selectionAskMode = .detected(canReplace: selection?.canPaste == true)
+    askQuery = ""
+    askRefineError = nil
+    askVisible = true
+    setPanelFrame(width: askPanelSize.width, height: askPanelSize.height, centered: true, display: true)
+    panel?.makeKeyAndOrderFront(nil)
+  }
+
+  /// Escape keeps the captured selection and returns to its actions.
+  private func returnFromSelectionAsk() {
+    cancelAskRefinement()
+    selectionAskMode = nil
+    askVisible = false
+    askQuery = ""
+    askRefineError = nil
+    state.returnFromOptions()
+    resizeActionRow()
+  }
+
+  private func submitSelectionAsk(_ request: String, mode: SelectionAskMode) {
+    guard case .selected(let text) = selection?.status else { returnFromSelectionAsk(); return }
+    guard let instruction = mode.instruction(for: request) else {
+      askRefineError = "Keep your request under \(SelectionAskMode.requestLimit) characters"; return
+    }
+    askVisible = false
+    selectionAskMode = nil
+    askQuery = ""
+    askMode = true
+    askQuestionPreview = String(request.split(whereSeparator: { $0.isWhitespace }).prefix(12).joined(separator: " ").prefix(100))
+    switch mode {
+    case .explain:
+      startReading(text, action: "text_habit", refinement: instruction)
+    case .write:
+      // Same delivery as the other writing actions: replace a revalidated editable
+      // selection, otherwise show a reading card with explicit copy.
+      resizeActionRow()
+      startCorrection(text, instruction: instruction)
+    }
   }
 
   func submitAsk() {
@@ -582,6 +672,7 @@ final class PanelController: NSObject, NSWindowDelegate {
       askQuery = ""
       return
     }
+    if let mode = selectionAskMode { submitSelectionAsk(question, mode: mode); return }
     guard question.unicodeScalars.count <= 4000 else { askRefineError = "Keep your request under 4,000 characters"; return }
     let id = UUID()
     let accountID = AccountStore.shared.user?.id
@@ -594,8 +685,16 @@ final class PanelController: NSObject, NSWindowDelegate {
       var products = false
       // Reuse the deployed Jev catalog. Longer prompts stay with Ask rather than
       // classifying a truncated request whose meaning could have changed.
-      // Product routing uses Tero Pro's ranking service; own-key Ask answers directly.
-      if !GatewayAccess.usesOwnKey, question.unicodeScalars.count <= 2000,
+      // Product routing uses Tero Pro's ranking service, or Jev with the person's own Typesafe key
+      // when their provider can search products. Otherwise own-key Ask answers directly.
+      let ownJev = GatewayAccess.usesOwnKey && AIConfiguration.active?.provider.supportsWebSearch == true ? JevClient.stored : nil
+      if let ownJev, question.unicodeScalars.count <= 2000,
+         let context = RankingContext(RecommendationContext(selection: SelectionReadout(
+           applicationName: "Tero Ask", processIdentifier: 0, status: .selected(question)), applicationID: nil)) {
+        if let scores = try? await ownJev.rank(context: context, candidates: ShoppingRequest.routingCandidates) {
+          products = ShoppingRequest.shouldShowProducts(scores)
+        }
+      } else if !GatewayAccess.usesOwnKey, question.unicodeScalars.count <= 2000,
          let context = RankingContext(RecommendationContext(selection: SelectionReadout(
            applicationName: "Tero Ask", processIdentifier: 0, status: .selected(question)), applicationID: nil)) {
         do {
@@ -651,7 +750,7 @@ final class PanelController: NSObject, NSWindowDelegate {
   }
 
   func refineAskPrompt() {
-    guard askVisible, !askRefining else { return }
+    guard askVisible, !askRefining, selectionAskMode == nil else { return }
     if !aiAllowanceAvailable { showAllowanceReached(); return }
     let original = askQuery
     guard !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -1053,6 +1152,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     switch definition.executor {
     case .shop:
       startShopping(text)
+      return
+    case .askSelection:
+      beginSelectionAsk()
       return
     case .openMaps, .directions, .units, .currencies, .timeZones:
       startUtility(action, text: text)
@@ -1849,7 +1951,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     startCorrection(text, translation: language)
   }
 
-  private func startCorrection(_ text: String, translation: ResponseLanguage? = nil, replyIntent: ReplyIntent? = nil, style: TextStyle? = nil, letterCase: LocalTextTransform? = nil, habit: TextHabit? = nil) {
+  private func startCorrection(_ text: String, translation: ResponseLanguage? = nil, replyIntent: ReplyIntent? = nil, style: TextStyle? = nil, letterCase: LocalTextTransform? = nil, habit: TextHabit? = nil, instruction: String? = nil) {
+    // A saved habit and a selection Ask share the gateway's selection + instruction contract.
+    let instruction = habit?.instruction ?? instruction
     guard let action = state.executing, let definition = ActionCatalog.definition(for: action),
           definition.transformsText else { return }
     guard definition.executor != .reply || replyIntent != nil else { return }
@@ -1861,7 +1965,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
     if definition.delivery(canReplace: selection?.canPaste == true) == .readingCard {
       if let localText { showExplanation(localText) }
-      else if let habit { startReading(text, action: "text_habit", refinement: habit.instruction) }
+      else if let instruction { startReading(text, action: "text_habit", refinement: instruction) }
       else if let gatewayAction = definition.gatewayAction {
         startReading(text, action: gatewayAction, language: translation, context: replyContext, intent: replyIntent, style: style)
       }
@@ -1885,9 +1989,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         if let localText { corrected = localText }
         else {
           guard let credential = await GatewayAccess.credential() else { throw CorrectionClient.Failure.unavailable }
-          if let habit {
+          if let instruction {
             guard habitOwner == AccountStore.shared.user?.id else { self.dismiss(restoreFocus: false); return }
-            corrected = try await CorrectionClient().reading(text, action: "text_habit", requestID: id, credential: credential, update: { _ in }, refinement: habit.instruction)
+            corrected = try await CorrectionClient().reading(text, action: "text_habit", requestID: id, credential: credential, update: { _ in }, refinement: instruction)
             guard habitOwner == AccountStore.shared.user?.id else { self.dismiss(restoreFocus: false); return }
           } else if let replyIntent {
             corrected = try await CorrectionClient().reply(text, context: context, intent: replyIntent, requestID: id, credential: credential)
@@ -2073,6 +2177,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     shoppingSession?.cancel(); shoppingSession = nil
     askVisible = false
     askMode = false
+    selectionAskMode = nil
     askQuery = ""
     cancelAskRefinement()
     askQuestionPreview = nil

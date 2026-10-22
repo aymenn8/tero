@@ -102,6 +102,29 @@ import CoreText
     let corrected = try? await CorrectionClient().correct("Thsi is a tset.", requestID: UUID(), credential: credential ?? "")
     check(corrected == "This is a quick test.", "CorrectionClient routes to own provider")
 
+    // Jev with an own Typesafe key: tero-rank's provider request, sent from this Mac, with validated scores.
+    let jevURL = URL(string: "http://127.0.0.1:\(port)/v1/systemone")!
+    let selection = SelectionReadout(applicationName: "Synthetic Notes", processIdentifier: 0, status: .selected("Thsi is a tset."))
+    if let context = RankingContext(RecommendationContext(selection: selection, applicationID: nil)) {
+      let habit = RankingClient.PersonalCandidate(id: "habit_00000000-0000-4000-8000-000000000001", name: "Polite reply", instruction: "Reply politely.")
+      let candidates = ["fix", "explain", habit.id]
+      do {
+        let scores = try await JevClient(endpoint: jevURL, key: "ts-test").rank(context: context, candidates: candidates, personalActions: [habit])
+        check(scores.map(\.id) == candidates && scores.first?.score == 2, "Jev: own key scores")
+      } catch { check(false, "Jev: own key scores (\(error))") }
+      do { _ = try await JevClient(endpoint: jevURL, key: "ts-wrongmodel").rank(context: context, candidates: candidates, personalActions: [habit]); check(false, "Jev: unexpected model refused") }
+      catch { check((error as? JevClient.Failure) == .invalid, "Jev: unexpected model refused") }
+      do { _ = try await JevClient(endpoint: jevURL, key: "ts-test").rank(context: context, candidates: ["fix", "invented"]); check(false, "Jev: unknown action refused") }
+      catch { check((error as? JevClient.Failure) == .invalid, "Jev: unknown action refused") }
+      // The harness rebuilds this client request with tero-rank and compares the provider bodies.
+      let request: [String: Any] = ["requestID": UUID().uuidString, "candidates": candidates,
+        "context": try! JSONSerialization.jsonObject(with: JSONEncoder().encode(context)),
+        "personalActions": [["id": habit.id, "name": habit.name, "instruction": habit.instruction]]]
+      try! JSONSerialization.data(withJSONObject: request).write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
+    } else { check(false, "Jev: synthetic context") }
+    do { try await JevClient(endpoint: jevURL, key: "ts-bad").verify(); check(false, "Jev: rejected key") }
+    catch { check((error as? JevClient.Failure) == .rejected, "Jev: rejected key") }
+
     print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
     exit(failures == 0 ? 0 : 1)
   }

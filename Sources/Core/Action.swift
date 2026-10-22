@@ -1,5 +1,5 @@
 enum Action: String, CaseIterable, Identifiable, Sendable {
-  case shop, renameFile, batchRename, moveFiles, downloadVideo, openMaps, directions, convertUnits, convertCurrencies, convertTimeZones, checkClaim, tone, simplify, improvePrompt, cleanFormatting, changeCase, calculate, rewrite, explain, translate, more, keyPoints, extractTasks, fix, reply, summarizeFile, createTasks, createEvent, search, back, allActions
+  case shop, askSelection, renameFile, batchRename, moveFiles, downloadVideo, openMaps, directions, convertUnits, convertCurrencies, convertTimeZones, checkClaim, tone, simplify, improvePrompt, cleanFormatting, changeCase, calculate, rewrite, explain, translate, more, keyPoints, extractTasks, fix, reply, summarizeFile, createTasks, createEvent, search, back, allActions
 
   var id: Self { self }
   var definition: ActionDefinition? { ActionCatalog.definition(for: self) }
@@ -29,7 +29,7 @@ enum Action: String, CaseIterable, Identifiable, Sendable {
 struct ActionDefinition: Equatable, Sendable {
   enum Input: Sendable { case fileWorkflow, text, number, readableFile, videoLink, place, quantity, currency, zonedTime }
   enum Options: Sendable { case place, unit, currency, timeZone, none, expression, targetLanguage, replyIntent, textStyle, letterCase }
-  enum Executor: Sendable { case shop, fileWorkflow, openMaps, directions, units, currencies, timeZones, checkClaim, calculator, correct, explain, translate, rewrite, keyPoints, extractTasks, reply, fileSummary, videoDownload, taskPlan, eventPlan, tone, simplify, improvePrompt, cleanFormatting, changeCase }
+  enum Executor: Sendable { case shop, askSelection, fileWorkflow, openMaps, directions, units, currencies, timeZones, checkClaim, calculator, correct, explain, translate, rewrite, keyPoints, extractTasks, reply, fileSummary, videoDownload, taskPlan, eventPlan, tone, simplify, improvePrompt, cleanFormatting, changeCase }
   enum Output: Sendable { case calculator, readingCard, replaceOrCopy, replaceOrRead, review }
   enum Delivery: Sendable { case interactive, readingCard, replacement, clipboard }
   let id: Action
@@ -82,7 +82,7 @@ struct ActionDefinition: Equatable, Sendable {
 
   var usesAI: Bool {
     switch executor {
-    case .shop, .checkClaim, .correct, .explain, .translate, .rewrite, .keyPoints, .extractTasks, .reply, .fileSummary, .taskPlan, .eventPlan, .tone, .simplify, .improvePrompt: true
+    case .shop, .askSelection, .checkClaim, .correct, .explain, .translate, .rewrite, .keyPoints, .extractTasks, .reply, .fileSummary, .taskPlan, .eventPlan, .tone, .simplify, .improvePrompt: true
     case .fileWorkflow: [.rename, .batchRename].contains(workflowKind)
     case .openMaps, .directions, .units, .currencies, .timeZones, .calculator, .videoDownload, .cleanFormatting, .changeCase: false
     }
@@ -97,6 +97,7 @@ struct ActionDefinition: Equatable, Sendable {
     case .currencies: ["currency", "currencies", "exchange", "eur", "usd", "devise", "taux"]
     case .timeZones: ["time", "timezone", "time zones", "est", "utc", "fuseau", "heure"]
     case .shop: ["shop", "shopping", "buy", "product", "acheter", "achat", "produit", "clavier", "keyboard"]
+    case .askSelection: ["ask", "question", "prompt", "custom", "write", "explain", "demander", "ecrire", "instruction"]
     case .checkClaim: ["fact check", "claim", "verify", "sources", "verifier", "affirmation"]
     case .taskPlan: ["reminders", "todo", "task", "rappels", "taches", "commitments"]
     case .eventPlan: ["calendar", "event", "meeting", "calendrier", "rendez-vous"]
@@ -142,13 +143,16 @@ struct ActionDefinition: Equatable, Sendable {
     }
   }
   /// The ranking service only scores actions it knows; local-only actions keep their local priority.
-  var rankedOnServer: Bool { executor != .videoDownload }
+  var rankedOnServer: Bool { executor != .videoDownload && executor != .askSelection }
+  /// Ask AI stays the third bubble whatever the semantic ranking says.
+  var pinnedSlot: Int? { executor == .askSelection ? 2 : nil }
   var transformsText: Bool { output == .replaceOrCopy || output == .replaceOrRead }
 }
 
 enum ActionCatalog {
   static let definitions: [ActionDefinition] = [
     .init(id: .shop, title: "Ask", input: .text, options: .none, executor: .shop, output: .review, writingPriority: 15, readingPriority: 15, numericPriority: nil),
+    .init(id: .askSelection, title: "Ask AI", input: .text, options: .none, executor: .askSelection, output: .replaceOrRead, writingPriority: 45, readingPriority: 45, numericPriority: nil),
     .init(id: .renameFile, title: "Rename", input: .fileWorkflow, options: .none, executor: .fileWorkflow, output: .review, writingPriority: 50, readingPriority: 50, numericPriority: nil),
     .init(id: .batchRename, title: "Batch rename", input: .fileWorkflow, options: .none, executor: .fileWorkflow, output: .review, writingPriority: 50, readingPriority: 50, numericPriority: nil),
     .init(id: .moveFiles, title: "Move files", input: .fileWorkflow, options: .none, executor: .fileWorkflow, output: .review, writingPriority: 50, readingPriority: 50, numericPriority: nil),
@@ -201,6 +205,7 @@ extension Action {
   var iconName: String {
     switch self {
     case .shop: "bubble.left"
+    case .askSelection: "text.bubble"
     case .renameFile, .batchRename: "pencil.line"
     case .moveFiles: "folder"
     case .downloadVideo: "arrow.down.circle"

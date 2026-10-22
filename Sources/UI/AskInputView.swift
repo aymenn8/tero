@@ -4,6 +4,8 @@ struct AskInputView: View {
   static let width: CGFloat = 360
   static let verticalChrome: CGFloat = 104
   static let refinementChrome: CGFloat = 64
+  /// Quoted selection line shown above the prompt for a selection Ask.
+  static let selectionChrome: CGFloat = 26
   let controller: PanelController
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var revealed = false
@@ -55,7 +57,7 @@ struct AskInputView: View {
   private var editor: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack {
-        TeroModeTitle(title: "Ask", loading: controller.askRefining)
+        TeroModeTitle(title: controller.selectionAskMode == nil ? "Ask" : "Ask AI", loading: controller.askRefining)
           .frame(maxWidth: .infinity, alignment: .leading)
           .overlay { WindowDragRegion().accessibilityHidden(true) }
         Button(action: controller.backFromAsk) {
@@ -67,13 +69,25 @@ struct AskInputView: View {
       }
       .frame(height: 28)
 
+      if controller.selectionAskMode != nil, let preview = controller.selectionAskPreview {
+        Text("“\(preview)”")
+          .font(.system(size: 12)).foregroundStyle(.white.opacity(0.5))
+          .lineLimit(1).truncationMode(.tail)
+          .frame(maxWidth: .infinity, alignment: .leading).frame(height: 16)
+          .accessibilityLabel("Selected text: \(preview)")
+      }
+
       AskPromptEditor(query: controller.askQuery, update: controller.updateAskQuery,
-                      accessibilityLabel: controller.refiningResult ? "Changes to the result" : "Ask prompt",
-                      accessibilityHelp: controller.askRefineError ?? "Return to send. Shift Return for a new line. Command R to refine your request.")
+                      accessibilityLabel: controller.refiningResult ? "Changes to the result" : controller.selectionAskMode == nil ? "Ask prompt" : "Request about the selection",
+                      accessibilityHelp: controller.askRefineError ?? (controller.selectionAskMode == nil
+                        ? "Return to send. Shift Return for a new line. Command R to refine your request."
+                        : controller.selectionAskMode == .write
+                          ? "Return to send. The result replaces the selection. Shift Return for a new line."
+                          : "Return to send. The answer opens in a card. Shift Return for a new line."))
         .frame(height: controller.askEditorHeight)
         .overlay(alignment: .topLeading) {
           if controller.askQuery.isEmpty {
-            Text(controller.refiningResult ? "What would you like to change?" : "Ask anything, or find a product…").font(.system(size: 14)).foregroundStyle(.white.opacity(0.55))
+            Text(placeholder).font(.system(size: 14)).foregroundStyle(.white.opacity(0.55))
               .allowsHitTesting(false).accessibilityHidden(true)
           }
         }
@@ -81,21 +95,28 @@ struct AskInputView: View {
         if let error = controller.askRefineError {
           Text(error).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             .help(error)
+        } else if let mode = controller.selectionAskMode {
+          // Informational only: the destination follows the selection's editability.
+          Label(mode == .write ? "Replaces the selection" : "Answer in a card",
+                systemImage: mode == .write ? "square.and.pencil" : "text.bubble")
+            .font(.system(size: 10)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
         }
         Spacer(minLength: 0)
-        Button(action: controller.refineAskPrompt) {
-          Image(systemName: "wand.and.stars")
-            .frame(width: 28, height: 28)
-          .overlay {
-            if controller.askRefining {
-              ModeActivityBorder(cornerRadius: 6)
-                .transition(.opacity)
+        if controller.selectionAskMode == nil {
+          Button(action: controller.refineAskPrompt) {
+            Image(systemName: "wand.and.stars")
+              .frame(width: 28, height: 28)
+            .overlay {
+              if controller.askRefining {
+                ModeActivityBorder(cornerRadius: 6)
+                  .transition(.opacity)
+              }
             }
           }
+          .help("Make your request clearer and more precise while keeping your intent and language. Review it before sending.\n⌘R to refine · ⌘Z to undo")
+          .accessibilityLabel(controller.askRouting ? "Understanding your request" : controller.askRefining ? "Refining your request" : "Refine prompt · Command R. Improve wording without sending your request.")
+          .disabled(controller.askRefining || controller.askQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .help("Make your request clearer and more precise while keeping your intent and language. Review it before sending.\n⌘R to refine · ⌘Z to undo")
-        .accessibilityLabel(controller.askRouting ? "Understanding your request" : controller.askRefining ? "Refining your request" : "Refine prompt · Command R. Improve wording without sending your request.")
-        .disabled(controller.askRefining || controller.askQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         Button(action: controller.submitAsk) {
           Image(systemName: "arrow.up").frame(width: 28, height: 28)
             .foregroundStyle(.white.opacity(0.95))
@@ -108,7 +129,13 @@ struct AskInputView: View {
       .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: controller.askRefining)
     }
     .padding(14)
-    .frame(width: Self.width, height: controller.askEditorHeight + Self.verticalChrome)
+    .frame(width: Self.width, height: controller.askEditorHeight + Self.verticalChrome
+           + (controller.selectionAskMode == nil ? 0 : Self.selectionChrome))
     .transition(.opacity)
+  }
+
+  private var placeholder: String {
+    if controller.refiningResult { return "What would you like to change?" }
+    return controller.selectionAskMode?.placeholder ?? "Ask anything, or find a product…"
   }
 }

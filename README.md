@@ -60,6 +60,8 @@ Tero doesn't resell AI. Add a key in **Settings → AI** and requests go **strai
 | Ollama, LM Studio | Local, OpenAI-compatible | — |
 | Any OpenAI-compatible endpoint | OpenAI-compatible | — |
 
+Optionally add a [Typesafe](https://typesafe.ai) key in **Settings → AI → Recommendations**: Jev then orders the suggested actions, called straight from your Mac like your AI provider. Without it, Tero uses local rules.
+
 Prefer not to manage keys? **Tero Pro** is an optional subscription with AI included, available from the website.
 
 ## Install
@@ -106,7 +108,7 @@ UI fixtures such as `Scripts/test-panel-layout.py` briefly open real panels on y
 Selection (Accessibility, Finder) ──► Recommendations ──► Action bubbles ──► Action
                                           │                                   │
                                    local rules, optional                own AI key ──► provider
-                                   semantic ranking (Pro)               Tero Pro   ──► Supabase gateway
+                                   Jev ranking (Pro or your own Typesafe key)               Tero Pro   ──► Supabase gateway
 ```
 
 | Path | What lives there |

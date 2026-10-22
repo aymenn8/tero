@@ -68,6 +68,18 @@ struct SemanticScore: Codable, Equatable, Sendable {
 }
 
 enum SemanticRankingPolicy {
+  /// Local-only actions lead the semantic order, except pinned ones, which keep their slot.
+  static func merge(localOnly: [ActionRecommendation], ranked: [ActionRecommendation]) -> [ActionRecommendation] {
+    func slot(_ recommendation: ActionRecommendation) -> Int? {
+      guard case .native(let action) = recommendation.target else { return nil }
+      return action.definition?.pinnedSlot
+    }
+    var merged = localOnly.filter { slot($0) == nil } + ranked
+    for pinned in localOnly.filter({ slot($0) != nil }) {
+      merged.insert(pinned, at: min(slot(pinned)!, merged.count))
+    }
+    return merged
+  }
   private static func validProbabilities(_ score: SemanticScore) -> Bool {
     guard let probabilities = score.probabilities else { return true } // Older gateway responses.
     guard Set(probabilities.keys) == Set(["0", "1", "2", "3"]) else { return false }

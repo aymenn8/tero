@@ -59,6 +59,13 @@ class Handler(BaseHTTPRequestHandler):
         with open(LOG, 'a') as log:
             log.write(json.dumps({'path': self.path, 'auth': auth, 'body': body}) + '\n')
         if 'bad' in auth: return self.send_json(401, {'error': 'invalid key'})
+        if self.path.endswith('/systemone'):
+            def answer(id):
+                level = 2 if id == 'fix' else 1
+                return {'type': 'score', 'score': level, 'confidence': 0.9, 'probabilities': {str(n): 1 if n == level else 0 for n in range(4)}}
+            model = 'other-model' if 'wrongmodel' in auth else body.get('model')
+            return self.send_json(200, {'model': model, 'answers': {id: answer(id) for id in body['questions']},
+                                        'usage': {'input_tokens': 500, 'output_tokens': 10}})
         name = schema_name(body)
         # Simulate a provider that rejects strict JSON schema output.
         if body.get('model') == 'no-schema' and (body.get('response_format') or {}).get('type') == 'json_schema':

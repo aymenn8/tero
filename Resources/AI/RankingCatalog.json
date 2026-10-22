@@ -1,0 +1,158 @@
+{
+  "batch_rename": {
+    "title": "Batch rename",
+    "description": "Analyze every selected file with AI and propose consistent, individually editable names, without templates or naming rules. Preview and validate before renaming, without overwriting.",
+    "when_to_offer": "Several regular files selected in Finder.",
+    "when_to_avoid": "Duplicate target names or existing target files."
+  },
+  "calculate": {
+    "title": "Calculate",
+    "description": "Open a numeric expression editor with immediate local calculation.",
+    "when_to_offer": "A number or arithmetic expression selected for further calculation.",
+    "when_to_avoid": "Prose, dates or identifiers mistaken for numbers."
+  },
+  "change_case": {
+    "title": "Change case",
+    "description": "Change letter case locally using an explicit lower, upper or title choice.",
+    "when_to_offer": "Text whose capitalization the user wants to change.",
+    "when_to_avoid": "Code and case-sensitive identifiers, or numeric-only content."
+  },
+  "check_claim": {
+    "title": "Check a claim",
+    "description": "Verify a factual claim against web evidence with a short verdict and linked sources.",
+    "when_to_offer": "A selected verifiable factual statement.",
+    "when_to_avoid": "An opinion, private personal statement, code or request to merely fix prose."
+  },
+  "clean_formatting": {
+    "title": "Clean formatting",
+    "description": "Clean redundant prose spacing locally while preserving useful structure and code.",
+    "when_to_offer": "Pasted prose with repeated spaces, invisible characters or redundant blank lines.",
+    "when_to_avoid": "Intentional indentation, tables or code needing those spaces."
+  },
+  "convert_currencies": {
+    "title": "Convert currencies",
+    "description": "Convert an amount using a chosen currency pair and dated ECB reference rate.",
+    "when_to_offer": "A selected amount, explicit currency or currency symbol; source currency is confirmed when ambiguous.",
+    "when_to_avoid": "A date, account identifier, multiple amounts or live-trading expectations."
+  },
+  "convert_time_zones": {
+    "title": "Convert time zones",
+    "description": "Resolve the source zone and date, then show the same instant in the Mac time zone.",
+    "when_to_offer": "A clock time with a recognized time zone.",
+    "when_to_avoid": "Time with no zone, invalid time or impossible/repeated DST wall time."
+  },
+  "convert_units": {
+    "title": "Convert units",
+    "description": "Convert one selected quantity locally, with explicit resolution of ambiguous source units.",
+    "when_to_offer": "A number followed by a recognized distance, weight, temperature, volume or speed unit.",
+    "when_to_avoid": "Multiple quantities, unclear separators or unrelated text."
+  },
+  "directions": {
+    "title": "Get directions",
+    "description": "Resolve a selected address and open directions to the user-chosen destination in Apple Maps.",
+    "when_to_offer": "An address the user may want to travel to.",
+    "when_to_avoid": "Numbers alone, code or unrelated prose."
+  },
+  "event_plan": {
+    "title": "Add to Calendar",
+    "description": "Prepare scheduled Apple Calendar event drafts for review before saving.",
+    "when_to_offer": "A selected meeting, appointment or visit with a concrete schedule.",
+    "when_to_avoid": "Task deadlines alone, cancelled events, or speculative plans."
+  },
+  "explain": {
+    "title": "Explain",
+    "description": "Give a short explanation, defining a term in its observed surrounding context when available.",
+    "when_to_offer": "An unfamiliar term or passage needing understanding; use the observed nearby excerpt to disambiguate the selected term.",
+    "when_to_avoid": "Content the user wants to send or an explicit request to translate."
+  },
+  "extract_tasks": {
+    "title": "Extract tasks",
+    "description": "List explicitly pending work with quoted owners and deadlines; creates no external items.",
+    "when_to_offer": "A message or document containing concrete requests or commitments.",
+    "when_to_avoid": "Completed work, vague possibilities or an appointment without work."
+  },
+  "fix": {
+    "title": "Correct",
+    "description": "Fix spelling and grammatical forms word by word without rewriting.",
+    "when_to_offer": "Clear spelling, accent, conjugation or agreement errors in prose.",
+    "when_to_avoid": "Intentional slang, correct prose, code, numbers alone."
+  },
+  "improve_prompt": {
+    "title": "Improve prompt",
+    "description": "Turn a rough request for an AI into a clear, actionable prompt without answering it.",
+    "when_to_offer": "A selected instruction, draft prompt or request intended for an AI; vague task descriptions that need context, constraints or output structure.",
+    "when_to_avoid": "Ordinary messages needing a reply, factual passages needing explanation, already precise prompts needing no change, or requests to execute the task directly."
+  },
+  "key_points": {
+    "title": "Key points",
+    "description": "Extract up to three essential ideas in the source language.",
+    "when_to_offer": "A substantive passage with several important ideas to retain.",
+    "when_to_avoid": "Very short messages, code or material with no distinct ideas."
+  },
+  "move_files": {
+    "title": "Move files",
+    "description": "Choose a folder or a recent destination, then move the selected files after validation. Recent folder paths remain on this Mac.",
+    "when_to_offer": "Downloaded files that need organizing.",
+    "when_to_avoid": "Missing or symbolic-link destinations, unavailable files, filename collisions."
+  },
+  "open_maps": {
+    "title": "Open in Maps",
+    "description": "Resolve a selected address or place and let the user choose a location to open in Apple Maps.",
+    "when_to_offer": "A street address or named place.",
+    "when_to_avoid": "Code, URLs, long prose, or no clear location."
+  },
+  "rename_file": {
+    "title": "Rename",
+    "description": "Analyze file contents with AI, preview an editable meaningful name and preserve the extension. Rename only after explicit validation.",
+    "when_to_offer": "One regular file selected in Finder.",
+    "when_to_avoid": "Unavailable cloud files, directories and symbolic links."
+  },
+  "reply": {
+    "title": "Reply",
+    "description": "Draft a response to an incoming message using a user-selected intention.",
+    "when_to_offer": "A meaningful incoming message inviting a response.",
+    "when_to_avoid": "An outgoing draft to correct, a code dump, or isolated values."
+  },
+  "rewrite": {
+    "title": "Rewrite",
+    "description": "Improve phrasing while preserving meaning, with a user-chosen register.",
+    "when_to_offer": "Awkward prose or a message that needs clearer phrasing.",
+    "when_to_avoid": "A bare number, code, or a request only for spelling correction."
+  },
+  "shop": {
+    "title": "Shop",
+    "description": "Find products to buy for a need mentioned in selected text, with optional preferences and verified product links.",
+    "when_to_offer": "A purchase need, replacement, product recommendation or comparison; the user needs an item, including an informal message about buying equipment or a gift.",
+    "when_to_avoid": "Non-shopping passages, text editing, stock investments, purchases of illegal or regulated goods, or requests to place an order."
+  },
+  "simplify": {
+    "title": "Simplify",
+    "description": "Replace jargon and complex wording with clear everyday language.",
+    "when_to_offer": "Dense prose, specialist terminology or complicated sentences.",
+    "when_to_avoid": "Already simple messages, code or isolated numbers."
+  },
+  "summarize_file": {
+    "title": "Summarize",
+    "description": "Explain one image, PDF, Word document, spreadsheet or presentation in a concise reading card. Office files are converted to PDF locally before the existing explicit AI upload; the original file and its path are not uploaded.",
+    "when_to_offer": "One downloaded image/PDF or supported office document selected in Finder, with readable contents.",
+    "when_to_avoid": "Unsupported formats, locked files, or a prepared PDF exceeding 4 MB or 30 pages."
+  },
+  "task_plan": {
+    "title": "Create tasks",
+    "description": "Prepare source-backed Apple Reminders drafts for review before saving.",
+    "when_to_offer": "Explicit pending work, assignments or promises worth saving as reminders.",
+    "when_to_avoid": "Completed or cancelled work, speculative ideas, or scheduled meetings alone."
+  },
+  "tone": {
+    "title": "Adjust tone",
+    "description": "Change a message to a warm, direct or diplomatic tone while keeping its stance.",
+    "when_to_offer": "A message whose tone could be adapted for its recipient.",
+    "when_to_avoid": "Facts needing explanation, code, or no communicative message."
+  },
+  "translate": {
+    "title": "Translate",
+    "description": "Translate into an explicitly chosen language while preserving tone and details.",
+    "when_to_offer": "Foreign-language prose or content the user wants in another language.",
+    "when_to_avoid": "Code, isolated numbers or prose already in the desired language."
+  }
+}

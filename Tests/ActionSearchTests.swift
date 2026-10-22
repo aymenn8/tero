@@ -3,14 +3,14 @@ import Testing
 
 @Test func actionSearchPagesHaveThreeSuggestionsAndNoCopy() {
   var state = ActionBarState()
-  #expect(state.suggestions == [.explain, .translate, .fix])
+  #expect(state.suggestions == [.explain, .translate, .askSelection])
   #expect(state.actions.suffix(2) == [.more, .search])
   state.select(.search); state.activate()
   #expect(state.isSearching && state.page == .main)
   let closesSearch = state.escape()
   #expect(!closesSearch)
   state.select(.more); state.activate()
-  #expect(state.suggestions == [.rewrite, .keyPoints, .extractTasks])
+  #expect(state.suggestions == [.fix, .rewrite, .keyPoints])
   #expect(state.actions.suffix(2) == [.back, .search])
   #expect(Action(rawValue: "copy") == nil)
   state.select(.search); state.activate()

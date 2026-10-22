@@ -17,6 +17,9 @@ enum PromptCatalog {
     return (try? JSONDecoder().decode([String: Entry].self, from: data)) ?? [:]
   }()
 
+  /// Raw published instructions for a prompt key such as "rank_actions:default".
+  static func instructions(_ key: String) -> String? { entries[key]?.instructions }
+
   static func variant(for body: JSONObject) -> String {
     switch body["action"] as? String {
     case "rewrite": body["style"] as? String ?? "natural"
